@@ -1,0 +1,391 @@
+/**
+ * Component Search Page - Backend Version
+ * Uses backend API for faster, cached component data
+ */
+
+import { useState, useEffect } from 'react';
+import { useBackendComponents, useBackendStats } from '@/hooks/useBackendComponents';
+
+export function ComponentSearchPage() {
+  // Filters
+  const [searchTerm, setSearchTerm] = useState('');
+  const [envFilter, setEnvFilter] = useState<'all' | 'prod' | 'non-prod'>('all');
+  const [vulnerableOnly, setVulnerableOnly] = useState(false);
+  const [scaOnly, setScaOnly] = useState(true);
+  const [deployedOnly, setDeployedOnly] = useState(false); // Show all components by default
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(50);
+
+  // Debounced search
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(searchTerm), 300);
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
+
+  // Fetch data from backend
+  const { data: componentsData, isLoading, error } = useBackendComponents({
+    search: debouncedSearch,
+    deployedOnly,
+    scaOnly,
+    vulnerableOnly,
+    envFilter,
+    page: currentPage,
+    pageSize,
+  });
+
+  const { data: stats } = useBackendStats();
+
+  // Reset to page 1 when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [debouncedSearch, envFilter, vulnerableOnly, scaOnly, deployedOnly]);
+
+  if (isLoading) {
+    return (
+      <div className="card">
+        <div className="flex items-center justify-center py-12">
+          <div className="text-gray-500">Loading component inventory...</div>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="card">
+        <div className="text-red-600">Error loading components: {(error as Error).message}</div>
+      </div>
+    );
+  }
+
+  const components = componentsData?.components || [];
+  const pagination = componentsData?.pagination || { page: 1, page_size: 50, total: 0, total_pages: 0 };
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="card">
+        <h1 className="text-2xl font-bold text-gray-900 mb-2">
+          Component Search
+          <span className="ml-3 text-sm font-normal text-blue-600">🌍 Account-wide</span>
+        </h1>
+        <p className="text-gray-600 mb-4">
+          Search your entire software bill of materials (SBOM) across all organizations and projects for zero-day incident response
+        </p>
+
+        {/* Summary Stats */}
+        <div className="grid grid-cols-6 gap-4">
+          <div>
+            <div className="text-sm text-gray-500">Total Components</div>
+            <div className="text-2xl font-bold text-gray-900">{stats?.total_components || 0}</div>
+          </div>
+          <div>
+            <div className="text-sm text-gray-500">With Vulnerabilities</div>
+            <div className="text-2xl font-bold text-orange-600">{stats?.vulnerable_components || 0}</div>
+          </div>
+          <div>
+            <div className="text-sm text-gray-500">In Production</div>
+            <div className="text-2xl font-bold text-blue-600">{stats?.in_production || 0}</div>
+          </div>
+          <div>
+            <div className="text-sm text-gray-500">Organizations</div>
+            <div className="text-2xl font-bold text-indigo-600">{stats?.total_orgs || 0}</div>
+          </div>
+          <div>
+            <div className="text-sm text-gray-500">Projects</div>
+            <div className="text-2xl font-bold text-cyan-600">{stats?.total_projects || 0}</div>
+          </div>
+          <div>
+            <div className="text-sm text-gray-500">Services</div>
+            <div className="text-2xl font-bold text-purple-600">{stats?.total_services || 0}</div>
+          </div>
+        </div>
+      </div>
+
+      {/* Search & Filters */}
+      <div className="card">
+        <h2 className="text-lg font-semibold text-gray-900 mb-4">Search Components</h2>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {/* Search */}
+          <div className="md:col-span-2">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Package Name (e.g., "log4j", "spring-core", "axios")
+            </label>
+            <input
+              type="text"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="Search any package..."
+              className="w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 text-lg px-4 py-3"
+              autoFocus
+            />
+            {searchTerm && (
+              <div className="mt-2 text-sm text-gray-600">
+                Found {pagination.total} matching component{pagination.total !== 1 ? 's' : ''}
+              </div>
+            )}
+          </div>
+
+          {/* Filters */}
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Environment</label>
+              <select
+                value={envFilter}
+                onChange={(e) => setEnvFilter(e.target.value as any)}
+                className="w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500"
+              >
+                <option value="all">All Environments</option>
+                <option value="prod">Production Only</option>
+                <option value="non-prod">Non-Prod Only</option>
+              </select>
+            </div>
+
+            <div className="space-y-2">
+              <label className="flex items-center">
+                <input
+                  type="checkbox"
+                  checked={deployedOnly}
+                  onChange={(e) => setDeployedOnly(e.target.checked)}
+                  className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                />
+                <span className="ml-2 text-sm text-gray-700 font-medium">Deployed Only</span>
+              </label>
+              <label className="flex items-center">
+                <input
+                  type="checkbox"
+                  checked={scaOnly}
+                  onChange={(e) => setScaOnly(e.target.checked)}
+                  className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                />
+                <span className="ml-2 text-sm text-gray-700">Libraries Only (SCA)</span>
+              </label>
+              <label className="flex items-center">
+                <input
+                  type="checkbox"
+                  checked={vulnerableOnly}
+                  onChange={(e) => setVulnerableOnly(e.target.checked)}
+                  className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                />
+                <span className="ml-2 text-sm text-gray-700">Vulnerable Only</span>
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-4 flex items-center justify-between">
+          <div className="text-sm text-gray-600">
+            Showing {Math.min((pagination.page - 1) * pagination.page_size + 1, pagination.total)}-{Math.min(pagination.page * pagination.page_size, pagination.total)} of {pagination.total} components
+          </div>
+          <div className="flex items-center gap-2">
+            <label className="text-sm font-medium text-gray-700">Per page:</label>
+            <select
+              value={pageSize}
+              onChange={(e) => {
+                setPageSize(Number(e.target.value));
+                setCurrentPage(1);
+              }}
+              className="rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500"
+            >
+              <option value="25">25</option>
+              <option value="50">50</option>
+              <option value="100">100</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      {/* Results Table */}
+      <div className="card overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Package
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Version
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Vulnerabilities
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Org / Project
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Services
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Environments
+                </th>
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              {components.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="px-4 py-8 text-center text-gray-500">
+                    No components found
+                  </td>
+                </tr>
+              ) : (
+                components.map((component: any) => {
+                  const severityCounts = {
+                    critical: component.vulnerabilities?.filter((v: any) => v.severity === 'CRITICAL').length || 0,
+                    high: component.vulnerabilities?.filter((v: any) => v.severity === 'HIGH').length || 0,
+                    medium: component.vulnerabilities?.filter((v: any) => v.severity === 'MEDIUM').length || 0,
+                    low: component.vulnerabilities?.filter((v: any) => v.severity === 'LOW').length || 0,
+                  };
+
+                  const uniqueOrgs = new Set(component.currentDeployments?.map((d: any) => d.orgId) || []);
+                  const uniqueProjects = new Set(component.currentDeployments?.map((d: any) => d.projectId) || []);
+                  const uniqueServices = new Set(component.currentDeployments?.map((d: any) => d.serviceId) || []);
+                  const uniqueEnvs = new Set(component.currentDeployments?.map((d: any) => d.envName).filter(Boolean) || []);
+
+                  return (
+                    <tr key={`${component.package}-${component.version}`} className="hover:bg-gray-50">
+                      <td className="px-4 py-3">
+                        <div className="font-mono text-sm font-medium text-gray-900">{component.package}</div>
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="font-mono text-sm text-gray-700">{component.version}</div>
+                      </td>
+                      <td className="px-4 py-3">
+                        {component.vulnerabilities?.length > 0 ? (
+                          <div className="flex items-center gap-2">
+                            {severityCounts.critical > 0 && (
+                              <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-800">
+                                {severityCounts.critical} Critical
+                              </span>
+                            )}
+                            {severityCounts.high > 0 && (
+                              <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-orange-100 text-orange-800">
+                                {severityCounts.high} High
+                              </span>
+                            )}
+                            {severityCounts.medium > 0 && (
+                              <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-yellow-100 text-yellow-800">
+                                {severityCounts.medium} Medium
+                              </span>
+                            )}
+                          </div>
+                        ) : (
+                          <span className="text-sm text-gray-400">None</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="text-sm text-gray-700">
+                          {uniqueOrgs.size} org{uniqueOrgs.size !== 1 ? 's' : ''} / {uniqueProjects.size} project{uniqueProjects.size !== 1 ? 's' : ''}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="text-sm text-gray-700">{uniqueServices.size}</div>
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="text-sm text-gray-700">
+                          {Array.from(uniqueEnvs).join(', ') || <span className="text-gray-400">Unknown</span>}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Pagination */}
+        {pagination.total_pages > 1 && (
+          <div className="bg-white px-4 py-3 flex items-center justify-between border-t border-gray-200">
+            <div className="flex-1 flex justify-between sm:hidden">
+              <button
+                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                disabled={currentPage === 1}
+                className="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Previous
+              </button>
+              <button
+                onClick={() => setCurrentPage(p => Math.min(pagination.total_pages, p + 1))}
+                disabled={currentPage === pagination.total_pages}
+                className="ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Next
+              </button>
+            </div>
+            <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
+              <div>
+                <p className="text-sm text-gray-700">
+                  Page <span className="font-medium">{pagination.page}</span> of <span className="font-medium">{pagination.total_pages}</span>
+                </p>
+              </div>
+              <div>
+                <nav className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px" aria-label="Pagination">
+                  <button
+                    onClick={() => setCurrentPage(1)}
+                    disabled={currentPage === 1}
+                    className="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    First
+                  </button>
+                  <button
+                    onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                    disabled={currentPage === 1}
+                    className="relative inline-flex items-center px-4 py-2 border border-gray-300 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Previous
+                  </button>
+                  <button
+                    onClick={() => setCurrentPage(p => Math.min(pagination.total_pages, p + 1))}
+                    disabled={currentPage === pagination.total_pages}
+                    className="relative inline-flex items-center px-4 py-2 border border-gray-300 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Next
+                  </button>
+                  <button
+                    onClick={() => setCurrentPage(pagination.total_pages)}
+                    disabled={currentPage === pagination.total_pages}
+                    className="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Last
+                  </button>
+                </nav>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Help Text */}
+      <div className="card bg-blue-50 border-blue-200">
+        <div className="flex">
+          <div className="flex-shrink-0">💡</div>
+          <div className="ml-3">
+            <h3 className="text-sm font-medium text-blue-800">Zero-Day Response</h3>
+            <div className="mt-2 text-sm text-blue-700">
+              <p>
+                Use this page to quickly search for any component when a zero-day vulnerability is announced.
+                For example, search for "log4j", "spring", "openssl", or any library name to see all versions
+                deployed across your services and environments.
+              </p>
+            </div>
+            <div className="mt-3 text-xs text-blue-600">
+              <p>
+                <strong>Note:</strong> Currently shows components that have been scanned for vulnerabilities.
+                Full SBOM component inventory not available via Harness API at this time.
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Core Principle */}
+      <div className="card bg-yellow-50 border-yellow-200">
+        <p className="text-sm text-yellow-800">
+          <strong>Core Principle:</strong> Never show "safe" when data is missing. Absence of evidence must be shown as a risk state, not as green status.
+        </p>
+      </div>
+    </div>
+  );
+}

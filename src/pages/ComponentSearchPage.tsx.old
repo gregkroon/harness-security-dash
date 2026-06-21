@@ -1,0 +1,501 @@
+import { useState, useMemo } from 'react';
+import { useAccountWideComponents } from '@/hooks/useAccountWideComponents';
+import { config } from '@/lib/config';
+
+export function ComponentSearchPage() {
+  // Fetch components from ALL orgs and projects in the account
+  // Note: Uses vulnerability scan data to build component list
+  // Full SBOM component inventory not available via Harness API
+  const { data: components = [], isLoading, error } = useAccountWideComponents();
+
+  // Filters
+  const [searchTerm, setSearchTerm] = useState('');
+  const [envFilter, setEnvFilter] = useState<'all' | 'prod' | 'non-prod'>('all');
+  const [vulnerableOnly, setVulnerableOnly] = useState(false);
+  const [scaOnly, setScaOnly] = useState(true); // Default to SCA only (libraries, not code issues)
+  const [deployedOnly, setDeployedOnly] = useState(true); // Default to deployed only
+
+  // Pagination
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(50);
+
+  // Filter
+  const filteredComponents = useMemo(() => {
+    let filtered = [...components];
+
+    // Deployed only filter (show only components with active deployments)
+    if (deployedOnly) {
+      filtered = filtered.filter(c => c.currentDeployments.length > 0);
+    }
+
+    // SCA only filter (show only libraries, not code quality issues)
+    if (scaOnly) {
+      filtered = filtered.filter(c => {
+        // Only keep components that have at least one SCA vulnerability
+        const hasSCA = c.vulnerabilities.some(v => v.findingType === 'SCA');
+
+        // Also filter out components that look like Docker images
+        const looksLikeArtifact = c.package.includes('/') || c.package.includes(':');
+
+        return hasSCA && !looksLikeArtifact;
+      });
+    }
+
+    // Search filter (package name)
+    if (searchTerm) {
+      const search = searchTerm.toLowerCase();
+      filtered = filtered.filter(c =>
+        c.package.toLowerCase().includes(search)
+      );
+    }
+
+    // Environment filter
+    if (envFilter === 'prod') {
+      filtered = filtered.filter(c => c.hasProduction);
+    } else if (envFilter === 'non-prod') {
+      filtered = filtered.filter(c => !c.hasProduction);
+    }
+
+    // Vulnerable only filter
+    if (vulnerableOnly) {
+      filtered = filtered.filter(c => c.vulnerabilities.length > 0);
+    }
+
+    // Sort by package name
+    filtered.sort((a, b) => a.package.localeCompare(b.package));
+
+    return filtered;
+  }, [components, searchTerm, envFilter, vulnerableOnly, scaOnly, deployedOnly]);
+
+  // Paginate
+  const paginatedComponents = useMemo(() => {
+    const startIdx = (currentPage - 1) * pageSize;
+    const endIdx = startIdx + pageSize;
+    return filteredComponents.slice(startIdx, endIdx);
+  }, [filteredComponents, currentPage, pageSize]);
+
+  const totalPages = Math.ceil(filteredComponents.length / pageSize);
+
+  // Reset to page 1 when filters change
+  useMemo(() => {
+    setCurrentPage(1);
+  }, [searchTerm, envFilter, vulnerableOnly, scaOnly, deployedOnly]);
+
+  if (isLoading) {
+    return (
+      <div className="card">
+        <div className="flex items-center justify-center py-12">
+          <div className="text-gray-500">Loading component inventory...</div>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="card">
+        <div className="text-red-600">Error loading components: {(error as Error).message}</div>
+      </div>
+    );
+  }
+
+  const stats = {
+    totalComponents: components.length,
+    totalVulnerable: components.filter(c => c.vulnerabilities.length > 0).length,
+    totalInProduction: components.filter(c => c.hasProduction).length,
+    totalOrgs: new Set(components.flatMap(c => c.currentDeployments.map(d => d.orgId)).filter(Boolean)).size,
+    totalProjects: new Set(components.flatMap(c => c.currentDeployments.map(d => d.projectId)).filter(Boolean)).size,
+    totalServices: new Set(components.flatMap(c => c.currentDeployments.map(d => d.serviceId))).size,
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="card">
+        <h1 className="text-2xl font-bold text-gray-900 mb-2">
+          Component Search
+          <span className="ml-3 text-sm font-normal text-blue-600">🌍 Account-wide</span>
+        </h1>
+        <p className="text-gray-600 mb-4">
+          Search your entire software bill of materials (SBOM) across all organizations and projects for zero-day incident response
+        </p>
+
+        {/* Summary Stats */}
+        <div className="grid grid-cols-6 gap-4">
+          <div>
+            <div className="text-sm text-gray-500">Total Components</div>
+            <div className="text-2xl font-bold text-gray-900">{stats.totalComponents}</div>
+          </div>
+          <div>
+            <div className="text-sm text-gray-500">With Vulnerabilities</div>
+            <div className="text-2xl font-bold text-orange-600">{stats.totalVulnerable}</div>
+          </div>
+          <div>
+            <div className="text-sm text-gray-500">In Production</div>
+            <div className="text-2xl font-bold text-blue-600">{stats.totalInProduction}</div>
+          </div>
+          <div>
+            <div className="text-sm text-gray-500">Organizations</div>
+            <div className="text-2xl font-bold text-indigo-600">{stats.totalOrgs}</div>
+          </div>
+          <div>
+            <div className="text-sm text-gray-500">Projects</div>
+            <div className="text-2xl font-bold text-cyan-600">{stats.totalProjects}</div>
+          </div>
+          <div>
+            <div className="text-sm text-gray-500">Services</div>
+            <div className="text-2xl font-bold text-purple-600">{stats.totalServices}</div>
+          </div>
+        </div>
+      </div>
+
+      {/* Search & Filters */}
+      <div className="card">
+        <h2 className="text-lg font-semibold text-gray-900 mb-4">Search Components</h2>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {/* Search */}
+          <div className="md:col-span-2">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Package Name (e.g., "log4j", "spring-core", "axios")
+            </label>
+            <input
+              type="text"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="Search any package..."
+              className="w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 text-lg px-4 py-3"
+              autoFocus
+            />
+            {searchTerm && (
+              <div className="mt-2 text-sm text-gray-600">
+                Found {filteredComponents.length} matching component{filteredComponents.length !== 1 ? 's' : ''}
+              </div>
+            )}
+          </div>
+
+          {/* Filters */}
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Environment</label>
+              <select
+                value={envFilter}
+                onChange={(e) => setEnvFilter(e.target.value as any)}
+                className="w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500"
+              >
+                <option value="all">All Environments</option>
+                <option value="prod">Production Only</option>
+                <option value="non-prod">Non-Prod Only</option>
+              </select>
+            </div>
+
+            <div className="space-y-2">
+              <label className="flex items-center">
+                <input
+                  type="checkbox"
+                  checked={deployedOnly}
+                  onChange={(e) => setDeployedOnly(e.target.checked)}
+                  className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                />
+                <span className="ml-2 text-sm text-gray-700 font-medium">Deployed Only</span>
+              </label>
+              <label className="flex items-center">
+                <input
+                  type="checkbox"
+                  checked={scaOnly}
+                  onChange={(e) => setScaOnly(e.target.checked)}
+                  className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                />
+                <span className="ml-2 text-sm text-gray-700">Libraries Only (SCA)</span>
+              </label>
+              <label className="flex items-center">
+                <input
+                  type="checkbox"
+                  checked={vulnerableOnly}
+                  onChange={(e) => setVulnerableOnly(e.target.checked)}
+                  className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                />
+                <span className="ml-2 text-sm text-gray-700">Vulnerable Only</span>
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-4 flex items-center justify-between">
+          <div className="text-sm text-gray-600">
+            Showing {Math.min((currentPage - 1) * pageSize + 1, filteredComponents.length)}-{Math.min(currentPage * pageSize, filteredComponents.length)} of {filteredComponents.length} components
+          </div>
+          <div className="flex items-center gap-2">
+            <label className="text-sm font-medium text-gray-700">Per page:</label>
+            <select
+              value={pageSize}
+              onChange={(e) => {
+                setPageSize(Number(e.target.value));
+                setCurrentPage(1);
+              }}
+              className="rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500"
+            >
+              <option value="25">25</option>
+              <option value="50">50</option>
+              <option value="100">100</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      {/* Results Table */}
+      <div className="card overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Package
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Version
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Vulnerabilities
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Org / Project
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Services
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Environments
+                </th>
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              {paginatedComponents.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="px-4 py-8 text-center text-gray-500">
+                    {searchTerm ? (
+                      <div>
+                        <div className="text-lg font-medium mb-1">No matches found for "{searchTerm}"</div>
+                        <div className="text-sm">Try a different search term or remove filters</div>
+                      </div>
+                    ) : (
+                      'No components found'
+                    )}
+                  </td>
+                </tr>
+              ) : (
+                paginatedComponents.map((component) => {
+                  const criticalCount = component.vulnerabilities.filter(v => v.severity === 'critical').length;
+                  const highCount = component.vulnerabilities.filter(v => v.severity === 'high').length;
+                  const uniqueOrgs = new Set(component.currentDeployments.map(d => d.orgName).filter(Boolean));
+
+                  // Generate Harness URL to view this component
+                  const getComponentUrl = () => {
+                    if (component.inArtifacts.length === 0) return null;
+                    const artifact = component.inArtifacts[0];
+                    if (!artifact.sourceId || !artifact.artifactId) return null;
+
+                    // Use the first deployment to get org/project context
+                    const deployment = component.currentDeployments[0];
+                    if (!deployment?.orgId || !deployment?.projectId) return null;
+
+                    const baseUrl = config.harness.baseUrl;
+                    const accountId = config.harness.accountId;
+
+                    // Generate PURL (Package URL) for the component
+                    // Format: pkg:type/namespace/name@version
+                    // For most packages we'll use a generic format
+                    let purl = '';
+                    const pkgName = component.package;
+                    const version = component.version;
+
+                    // Detect package type based on name patterns
+                    if (pkgName.startsWith('@') || pkgName.includes('/') && !pkgName.includes(':')) {
+                      // npm scoped package
+                      purl = `pkg:npm/${pkgName}@${version}`;
+                    } else if (pkgName.includes(':')) {
+                      // Maven-style (org:artifact)
+                      const parts = pkgName.split(':');
+                      purl = `pkg:maven/${parts[0]}/${parts[1]}@${version}`;
+                    } else {
+                      // Generic debian package (most common in container scans)
+                      purl = `pkg:deb/debian/${pkgName}@${version}`;
+                    }
+
+                    const encodedPurl = encodeURIComponent(purl);
+
+                    return `${baseUrl}/ng/account/${accountId}/module/ssca/orgs/${deployment.orgId}/projects/${deployment.projectId}/artifact-sources/${artifact.sourceId}/artifacts/${artifact.artifactId}/details/dependencies?purl=${encodedPurl}`;
+                  };
+
+                  const componentUrl = getComponentUrl();
+
+                  return (
+                    <tr key={`${component.package}@${component.version}`} className="hover:bg-gray-50">
+                      <td className="px-4 py-4">
+                        {componentUrl ? (
+                          <a
+                            href={componentUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-sm font-medium text-blue-600 hover:text-blue-800 underline break-all"
+                            title="View in Harness SSCA"
+                          >
+                            {component.package}
+                          </a>
+                        ) : (
+                          <div className="text-sm font-medium text-gray-900 break-all">
+                            {component.package}
+                          </div>
+                        )}
+                      </td>
+                      <td className="px-4 py-4 whitespace-nowrap">
+                        <div className="text-sm text-gray-900">{component.version}</div>
+                      </td>
+                      <td className="px-4 py-4">
+                        {component.vulnerabilities.length > 0 ? (
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                                component.highestSeverity === 'critical' ? 'bg-red-100 text-red-800' :
+                                component.highestSeverity === 'high' ? 'bg-orange-100 text-orange-800' :
+                                component.highestSeverity === 'medium' ? 'bg-yellow-100 text-yellow-800' :
+                                'bg-gray-100 text-gray-800'
+                              }`}>
+                                {component.highestSeverity}
+                              </span>
+                              <span className="text-xs text-gray-500">
+                                {component.vulnerabilities.length} CVE{component.vulnerabilities.length !== 1 ? 's' : ''}
+                              </span>
+                            </div>
+                            {(criticalCount > 0 || highCount > 0) && (
+                              <div className="text-xs mt-1 space-y-0.5">
+                                {criticalCount > 0 && (
+                                  <div className="text-red-600">🔴 {criticalCount} critical</div>
+                                )}
+                                {highCount > 0 && (
+                                  <div className="text-orange-600">🟠 {highCount} high</div>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          <span className="text-sm text-green-600">✓ None</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-4">
+                        <div className="text-xs text-gray-500 space-y-1 max-h-20 overflow-y-auto">
+                          {component.currentDeployments.length === 0 ? (
+                            <div className="text-gray-400">No deployments</div>
+                          ) : (
+                            Array.from(new Set(
+                              component.currentDeployments.map(d =>
+                                `${d.orgName || d.orgId}/${d.projectName || d.projectId}`
+                              )
+                            )).slice(0, 5).map((orgProject, idx) => (
+                              <div key={idx}>{orgProject}</div>
+                            ))
+                          )}
+                          {uniqueOrgs.size > 5 && (
+                            <div className="text-gray-400">+{uniqueOrgs.size - 5} more</div>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-4 py-4">
+                        <div className="text-sm text-gray-900">
+                          {component.uniqueServices}
+                        </div>
+                        <div className="text-xs text-gray-500 max-h-16 overflow-y-auto">
+                          {Array.from(new Set(component.currentDeployments.map(d => d.serviceName)))
+                            .slice(0, 3)
+                            .join(', ')}
+                          {component.uniqueServices > 3 && ` +${component.uniqueServices - 3}`}
+                        </div>
+                      </td>
+                      <td className="px-4 py-4">
+                        <div className="text-sm text-gray-900">
+                          {component.uniqueEnvironments}
+                        </div>
+                        <div className="text-xs text-gray-500 space-y-0.5 max-h-20 overflow-y-auto">
+                          {component.currentDeployments.slice(0, 3).map(dep => (
+                            <div key={`${dep.serviceId}-${dep.envId}`}>
+                              {dep.envType === 'Production' ? '🔴' : '🔵'} {dep.envName}
+                            </div>
+                          ))}
+                          {component.currentDeployments.length > 3 && (
+                            <div className="text-gray-400">+{component.currentDeployments.length - 3} more</div>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Pagination Controls */}
+        {totalPages > 1 && (
+          <div className="px-4 py-3 border-t border-gray-200 flex items-center justify-between">
+            <button
+              onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+              disabled={currentPage === 1}
+              className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Previous
+            </button>
+
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-gray-700">
+                Page {currentPage} of {totalPages}
+              </span>
+              <input
+                type="number"
+                min="1"
+                max={totalPages}
+                value={currentPage}
+                onChange={(e) => {
+                  const page = Number(e.target.value);
+                  if (page >= 1 && page <= totalPages) {
+                    setCurrentPage(page);
+                  }
+                }}
+                className="w-20 px-2 py-1 border border-gray-300 rounded text-sm"
+              />
+            </div>
+
+            <button
+              onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+              disabled={currentPage === totalPages}
+              className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Next
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* Help Text */}
+      {!searchTerm && (
+        <div className="space-y-4">
+          <div className="card bg-blue-50 border border-blue-200">
+            <div className="flex items-start gap-3">
+              <div className="text-2xl">💡</div>
+              <div>
+                <h3 className="text-sm font-semibold text-blue-900 mb-1">Zero-Day Response</h3>
+                <p className="text-sm text-blue-800 mb-2">
+                  Use this page to quickly search for any component when a zero-day vulnerability is announced.
+                  For example, search for "log4j", "spring", "openssl", or any library name to see all versions
+                  deployed across your services and environments.
+                </p>
+                <p className="text-xs text-blue-700">
+                  <strong>Note:</strong> Currently shows components that have been scanned for vulnerabilities.
+                  Full SBOM component inventory not available via Harness API at this time.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

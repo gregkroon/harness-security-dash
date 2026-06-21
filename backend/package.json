@@ -1,0 +1,21 @@
+{
+  "name": "harness-security-dashboard-backend",
+  "version": "1.0.0",
+  "description": "Backend API for Harness Security Dashboard",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "nodemon src/server.js"
+  },
+  "keywords": ["harness", "security", "sbom", "vulnerability"],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "better-sqlite3": "^12.11.1",
+    "cors": "^2.8.6",
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1",
+    "node-cron": "^4.4.1",
+    "node-fetch": "^2.7.0"
+  }
+}

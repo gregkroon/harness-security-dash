@@ -1,0 +1,412 @@
+import { useState } from 'react';
+import { useDashboardOverview } from '@/hooks/useHarnessData';
+import { OrgProjectSelector } from '@/components/OrgProjectSelector';
+
+export function DashboardPage() {
+  const [orgId, setOrgId] = useState('demo'); // Match the working curl command
+  const [projectId, setProjectId] = useState('Platform_Engineering'); // Match the working curl command
+  const [showInstrumented, setShowInstrumented] = useState(false); // Toggle for viewing instrumented vs uninstrumented
+
+  const { data, isLoading, error } = useDashboardOverview(orgId, projectId);
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600 mx-auto"></div>
+          <p className="mt-4 text-gray-600">Loading dashboard data...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    const errorMessage = (error as Error).message;
+    const is404 = errorMessage.includes('404');
+
+    return (
+      <div className="space-y-4">
+        {/* Org/Project Selector */}
+        <div className="card">
+          <OrgProjectSelector
+            selectedOrg={orgId}
+            selectedProject={projectId}
+            onOrgChange={setOrgId}
+            onProjectChange={setProjectId}
+          />
+        </div>
+
+        <div className="card bg-danger-50 border-danger-200">
+          <h3 className="text-lg font-semibold text-danger-700 mb-2">Error Loading Data</h3>
+          <p className="text-danger-600 mb-4">{errorMessage}</p>
+
+          {is404 && (
+            <div className="bg-white p-4 rounded border border-danger-300">
+              <h4 className="font-semibold text-danger-800 mb-2">💡 Quick Fixes:</h4>
+              <ul className="list-disc list-inside space-y-2 text-sm text-danger-700">
+                <li>
+                  <strong>Select a different project:</strong> The project "{projectId}" may not exist or doesn't have SCS data.
+                  Use the dropdown above to select a project with artifacts and SBOMs.
+                </li>
+                <li>
+                  <strong>Try demo mode:</strong> Set <code className="bg-danger-100 px-1 rounded">VITE_DEMO_MODE=true</code> in your .env file to see the dashboard with mock data.
+                </li>
+                <li>
+                  <strong>Verify SCS setup:</strong> Ensure the selected project has:
+                  <ul className="list-circle list-inside ml-4 mt-1">
+                    <li>SSCA/SCS module enabled</li>
+                    <li>Artifact sources configured</li>
+                    <li>Pipelines with SBOM generation</li>
+                  </ul>
+                </li>
+              </ul>
+            </div>
+          )}
+
+          {!is404 && (
+            <p className="text-sm text-danger-600 mt-2">
+              Check that your Harness credentials are configured in .env file
+            </p>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  if (!data) return null;
+
+  console.log('Dashboard data:', {
+    uninstrumentedCount: data.coverage.uninstrumentedServices.length,
+    totalServices: data.coverage.totalServices,
+    coveragePercentage: data.coverage.coveragePercentage,
+    topActionsCount: data.topActions.length
+  });
+
+  return (
+    <div className="space-y-8">
+      {/* Header */}
+      <div>
+        <h1 className="text-3xl font-bold text-gray-900">Security Dashboard</h1>
+        <p className="mt-2 text-sm text-gray-600">
+          Verified production exposure and measured blindness
+        </p>
+      </div>
+
+      {/* Org/Project Selector */}
+      <div className="card">
+        <OrgProjectSelector
+          selectedOrg={orgId}
+          selectedProject={projectId}
+          onOrgChange={setOrgId}
+          onProjectChange={setProjectId}
+        />
+      </div>
+
+      {/* Key Metrics */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+
+        <div className={`card ${data.coverage.coveragePercentage < 80 ? 'border-warning-300 bg-warning-50' : ''}`}>
+          <div className="flex items-center">
+            <div className="flex-shrink-0">
+              <div className="w-12 h-12 bg-danger-100 rounded-lg flex items-center justify-center">
+                <span className="text-2xl">🔴</span>
+              </div>
+            </div>
+            <div className="ml-5 w-0 flex-1">
+              <dl>
+                <dt className="text-sm font-medium text-gray-500 truncate">
+                  Critical in Production
+                </dt>
+                <dd className="flex items-baseline">
+                  <div className="text-3xl font-bold text-danger-700">
+                    {data.criticalInProduction}
+                  </div>
+                  {data.coverage.coveragePercentage < 80 && (
+                    <span className="ml-2 text-sm font-medium text-warning-600">
+                      ({data.coverage.coveragePercentage}% visibility)
+                    </span>
+                  )}
+                </dd>
+              </dl>
+            </div>
+          </div>
+          <div className="mt-4 text-sm text-gray-600">
+            Critical severity vulnerabilities deployed
+            {data.coverage.coveragePercentage < 80 && (
+              <span className="block mt-1 text-warning-700 font-medium">
+                ⚠️ Low coverage - actual count may be higher
+              </span>
+            )}
+          </div>
+        </div>
+
+        <div className={`card ${data.coverage.coveragePercentage < 50 ? 'border-danger-300 bg-danger-50' : data.coverage.coveragePercentage < 80 ? 'border-warning-300 bg-warning-50' : 'border-success-300 bg-success-50'}`}>
+          <div className="flex items-center">
+            <div className="flex-shrink-0">
+              <div className={`w-12 h-12 rounded-lg flex items-center justify-center ${data.coverage.coveragePercentage < 50 ? 'bg-danger-100' : data.coverage.coveragePercentage < 80 ? 'bg-warning-100' : 'bg-success-100'}`}>
+                <span className="text-2xl">📊</span>
+              </div>
+            </div>
+            <div className="ml-5 w-0 flex-1">
+              <dl>
+                <dt className="text-sm font-medium text-gray-500 truncate">
+                  Coverage
+                </dt>
+                <dd className="flex items-baseline">
+                  <div className={`text-3xl font-bold ${data.coverage.coveragePercentage < 50 ? 'text-danger-700' : data.coverage.coveragePercentage < 80 ? 'text-warning-700' : 'text-success-700'}`}>
+                    {data.coverage.coveragePercentage}%
+                  </div>
+                </dd>
+              </dl>
+            </div>
+          </div>
+          <div className="mt-4 text-sm text-gray-600">
+            {data.coverage.servicesWithDeployments} / {data.coverage.totalServices} services instrumented
+          </div>
+        </div>
+      </div>
+
+      {/* Top Actions */}
+      <div className="card">
+        <h2 className="text-lg font-semibold text-gray-900 mb-4">
+          Top 10 Priority Actions
+        </h2>
+        {data.topActions.length === 0 ? (
+          <p className="text-gray-500 italic">No high-priority actions at this time</p>
+        ) : (
+          <div className="space-y-3">
+            {data.topActions.map((action, idx) => {
+              const isCoverageAction = action.type === 'critical_low_coverage' || action.type === 'warning_low_coverage';
+              const priorityColor = action.priority === 1 ? 'bg-danger-600' : action.priority === 2 ? 'bg-warning-600' : 'bg-primary-600';
+
+              const handleClick = () => {
+                console.log('Action clicked:', action.type, 'isCoverageAction:', isCoverageAction);
+                if (isCoverageAction) {
+                  const element = document.getElementById('coverage-gaps');
+                  console.log('Found element:', element);
+                  if (element) {
+                    console.log('Scrolling to element...');
+                    element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    // Add a brief highlight effect
+                    element.style.boxShadow = '0 0 0 4px rgba(59, 130, 246, 0.5)';
+                    setTimeout(() => {
+                      element.style.boxShadow = '';
+                    }, 2000);
+                  } else {
+                    console.error('Element with id "coverage-gaps" not found');
+                  }
+                } else {
+                  console.log('Not a coverage action, no scroll');
+                }
+              };
+
+              return (
+                <div
+                  key={idx}
+                  className={`flex items-start p-4 bg-gray-50 rounded-lg border-2 hover:bg-gray-100 transition-all ${
+                    action.priority === 1 ? 'border-danger-300' : action.priority === 2 ? 'border-warning-300' : 'border-gray-200'
+                  } ${isCoverageAction ? 'cursor-pointer hover:border-primary-400 hover:shadow-md' : ''}`}
+                  onClick={handleClick}
+                  role={isCoverageAction ? 'button' : undefined}
+                  tabIndex={isCoverageAction ? 0 : undefined}
+                  onKeyDown={isCoverageAction ? (e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      handleClick();
+                    }
+                  } : undefined}
+                >
+                  <div className="flex-shrink-0">
+                    <span className={`inline-flex items-center justify-center w-8 h-8 rounded-full ${priorityColor} text-white text-sm font-bold`}>
+                      {action.priority}
+                    </span>
+                  </div>
+                  <div className="ml-4 flex-1">
+                    <h3 className="text-sm font-medium text-gray-900">{action.title}</h3>
+                    <p className="mt-1 text-sm text-gray-600">{action.description}</p>
+                    <p className="mt-2 text-xs text-gray-500">
+                      {isCoverageAction ? (
+                        <span className="font-medium text-primary-600">
+                          👇 Click to see all affected services below
+                        </span>
+                      ) : (
+                        <>
+                          Service: {action.serviceName}
+                          {action.cveId && ` • CVE: ${action.cveId}`}
+                        </>
+                      )}
+                    </p>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* Coverage Gaps - CRITICAL SECTION */}
+      <div id="coverage-gaps" className={`card ${!showInstrumented && data.coverage.coveragePercentage < 50 ? 'bg-danger-50 border-danger-300' : !showInstrumented ? 'bg-warning-50 border-warning-200' : 'bg-success-50 border-success-200'}`}>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className={`text-lg font-semibold ${!showInstrumented && data.coverage.coveragePercentage < 50 ? 'text-danger-800' : !showInstrumented ? 'text-warning-800' : 'text-success-800'}`}>
+            {showInstrumented ? '✅ Instrumented Services' : data.coverage.coveragePercentage < 50 ? '🚨 Blind Spots' : '⚠️ Blind Spots'}: {showInstrumented ? data.coverage.servicesWithDeployments : data.coverage.uninstrumentedServices.length} Services
+          </h2>
+          <div className="flex items-center gap-3">
+            <div className={`px-3 py-1 rounded-full text-sm font-semibold ${data.coverage.coveragePercentage < 50 ? 'bg-danger-200 text-danger-900' : 'bg-warning-200 text-warning-900'}`}>
+              {data.coverage.coveragePercentage}% Coverage
+            </div>
+            <div className="flex items-center gap-2 bg-white px-3 py-2 rounded-lg border-2 border-gray-300">
+              <label className="text-sm font-medium text-gray-700">View:</label>
+              <button
+                onClick={() => setShowInstrumented(false)}
+                className={`px-3 py-1 rounded text-sm font-medium transition-colors ${
+                  !showInstrumented
+                    ? 'bg-danger-600 text-white'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                }`}
+              >
+                Uninstrumented ({data.coverage.uninstrumentedServices.length})
+              </button>
+              <button
+                onClick={() => setShowInstrumented(true)}
+                className={`px-3 py-1 rounded text-sm font-medium transition-colors ${
+                  showInstrumented
+                    ? 'bg-success-600 text-white'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                }`}
+              >
+                Instrumented ({data.coverage.servicesWithDeployments})
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Conditional content based on filter */}
+        {!showInstrumented ? (
+          <>
+            {/* Uninstrumented Services View */}
+            <div className={`p-4 rounded-lg mb-4 ${data.coverage.coveragePercentage < 50 ? 'bg-danger-100 border-danger-300' : 'bg-warning-100 border-warning-300'} border`}>
+              <p className={`text-sm font-semibold mb-2 ${data.coverage.coveragePercentage < 50 ? 'text-danger-900' : 'text-warning-900'}`}>
+                ⚠️ Core Principle Violation: "Never show 'safe' when data is missing"
+              </p>
+              <p className={`text-sm ${data.coverage.coveragePercentage < 50 ? 'text-danger-800' : 'text-warning-800'}`}>
+                These services have no deployment tracking or SBOM data in Harness. Any vulnerabilities in these services are invisible to this dashboard.
+                <strong> Absence of evidence is NOT evidence of safety.</strong>
+              </p>
+            </div>
+
+            <div className="mb-4">
+              <h3 className="text-sm font-semibold text-gray-900 mb-2">What needs to happen:</h3>
+              <ul className="list-disc list-inside space-y-1 text-sm text-gray-700">
+                <li>Connect these services to Harness deployment pipelines</li>
+                <li>Enable SBOM generation (SSCA/SCS module) in their build pipelines</li>
+                <li>Verify artifact tracking is configured for each service</li>
+                <li>Set up deployment verification steps to capture environment data</li>
+              </ul>
+            </div>
+
+            <div className="space-y-2 max-h-96 overflow-y-auto">
+              <div className="grid grid-cols-1 gap-2">
+                {data.coverage.uninstrumentedServices.map((service, idx) => (
+                  <div
+                    key={service.serviceId}
+                    className="flex items-start justify-between p-3 bg-white rounded border border-gray-300 hover:border-primary-400 hover:shadow-sm transition-all"
+                  >
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-gray-200 text-gray-700 text-xs font-bold">
+                          {idx + 1}
+                        </span>
+                        <p className="text-sm font-semibold text-gray-900">{service.serviceName}</p>
+                      </div>
+                      <p className="text-xs text-gray-600 mt-1 ml-8">Service ID: <code className="bg-gray-100 px-1 rounded">{service.serviceId}</code></p>
+                      <p className="text-xs text-gray-500 mt-1 ml-8">{service.reason}</p>
+                    </div>
+                    <div className="flex-shrink-0">
+                      <span className="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-gray-100 text-gray-700">
+                        No visibility
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {data.coverage.uninstrumentedServices.length > 10 && (
+              <div className={`mt-4 p-3 rounded ${data.coverage.coveragePercentage < 50 ? 'bg-danger-100' : 'bg-warning-100'}`}>
+                <p className={`text-sm font-medium ${data.coverage.coveragePercentage < 50 ? 'text-danger-900' : 'text-warning-900'}`}>
+                  📊 Showing all {data.coverage.uninstrumentedServices.length} uninstrumented services.
+                  This represents {100 - data.coverage.coveragePercentage}% of your service inventory with zero visibility.
+                </p>
+              </div>
+            )}
+          </>
+        ) : (
+          <>
+            {/* Instrumented Services View */}
+            <div className="p-4 rounded-lg mb-4 bg-success-100 border-success-300 border">
+              <p className="text-sm font-semibold mb-2 text-success-900">
+                ✅ These services have active deployment tracking and vulnerability visibility
+              </p>
+              <p className="text-sm text-success-800">
+                Each service below has at least one deployment recorded in Harness. You can view their vulnerability exposures on the <a href="/exposures" className="underline font-semibold">Exposures page</a>.
+              </p>
+            </div>
+
+            <div className="space-y-2 max-h-96 overflow-y-auto">
+              <div className="grid grid-cols-1 gap-2">
+                {data.coverage.instrumentedServices.map((service, idx) => (
+                  <div
+                    key={service.serviceId}
+                    className="flex items-start justify-between p-3 bg-white rounded border border-success-300 hover:border-success-500 hover:shadow-sm transition-all"
+                  >
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-success-200 text-success-900 text-xs font-bold">
+                          {idx + 1}
+                        </span>
+                        <p className="text-sm font-semibold text-gray-900">{service.serviceName}</p>
+                      </div>
+                      <p className="text-xs text-gray-600 mt-1 ml-8">Service ID: <code className="bg-gray-100 px-1 rounded">{service.serviceId}</code></p>
+                      <div className="flex items-center gap-3 mt-2 ml-8 text-xs text-gray-600">
+                        <span>📦 {service.deploymentCount} deployment{service.deploymentCount !== 1 ? 's' : ''}</span>
+                        <span>🌍 {service.environmentCount} environment{service.environmentCount !== 1 ? 's' : ''}</span>
+                        {service.hasProduction && <span className="text-danger-600 font-semibold">🔴 Production</span>}
+                        {service.hasSBOM ? (
+                          <span className="text-success-600 font-semibold">✅ SBOM ({service.sbomCoverage}%)</span>
+                        ) : (
+                          <span className="text-warning-600 font-semibold">⚠️ No SBOM</span>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex-shrink-0">
+                      <span className="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-success-100 text-success-700">
+                        ✅ Instrumented
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {data.coverage.servicesWithDeployments === 0 && (
+              <div className="mt-4 p-4 rounded bg-warning-100 border border-warning-300">
+                <p className="text-sm font-medium text-warning-900">
+                  No instrumented services found. All services need deployment tracking configured.
+                </p>
+              </div>
+            )}
+          </>
+        )}
+      </div>
+
+      {/* Data Freshness */}
+      <div className="text-center text-sm text-gray-500">
+        <p>
+          Data freshness: {new Date(data.dataFreshness.lastFetchedAt).toLocaleString()}
+          {' • '}
+          Source: {data.dataFreshness.source === 'cache' ? 'Cached' : 'Live from Harness'}
+        </p>
+      </div>
+    </div>
+  );
+}

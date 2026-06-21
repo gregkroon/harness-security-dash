@@ -1,0 +1,23 @@
+services:
+  harness-security-dash:
+    build: .
+    container_name: harness-security-dash
+    ports:
+      - "8080:80"
+    environment:
+      - HARNESS_BASE_URL=${HARNESS_BASE_URL:-https://app.harness.io}
+      - HARNESS_ACCOUNT_ID=${HARNESS_ACCOUNT_ID}
+      - HARNESS_API_KEY=${HARNESS_API_KEY}
+      - PORT=3001
+      - DB_PATH=/app/data/components.db
+      - ENABLE_AUTO_SYNC=${ENABLE_AUTO_SYNC:-true}
+      - SYNC_ON_STARTUP=${SYNC_ON_STARTUP:-true}
+    volumes:
+      - ./data:/app/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
