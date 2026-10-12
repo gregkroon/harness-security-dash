@@ -51,13 +51,16 @@ COPY --from=backend-build /app/backend /app/backend
 # Copy frontend build
 COPY --from=frontend-build /app/frontend/dist /app/frontend/dist
 
-# Create nginx config
+# Create non-root user for running the application
+RUN addgroup -S appgroup && adduser -S appuser -G appgroup
+
+# Create nginx config (use port 8080 so non-root user can bind)
 RUN mkdir -p /run/nginx && \
     mkdir -p /app/data
 
 COPY <<EOF /etc/nginx/http.d/default.conf
 server {
-    listen 80;
+    listen 8080;
     server_name _;
 
     # Frontend
@@ -95,12 +98,18 @@ EOF
 
 RUN chmod +x /app/start.sh
 
+# Set ownership so appuser can access application files and nginx runtime dirs
+RUN chown -R appuser:appgroup /app /run/nginx /var/log/nginx /var/lib/nginx
+
 # Expose port
-EXPOSE 80
+EXPOSE 8080
+
+# Switch to non-root user
+USER appuser
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
-  CMD wget --no-verbose --tries=1 --spider http://localhost/api/health || exit 1
+  CMD wget --no-verbose --tries=1 --spider http://localhost:8080/api/health || exit 1
 
 # Volume for persistent data
 VOLUME ["/app/data"]
