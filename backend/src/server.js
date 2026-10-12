@@ -7,6 +7,7 @@
 
 const express = require('express');
 const cors = require('cors');
+const csrf = require('./csrf-protection');
 const cron = require('node-cron');
 const Database = require('better-sqlite3');
 const path = require('path');
@@ -18,6 +19,11 @@ const PORT = process.env.PORT || 3001;
 // Middleware
 app.use(cors());
 app.use(express.json());
+app.use(csrf({
+  allowedOrigins: process.env.ALLOWED_ORIGINS
+    ? process.env.ALLOWED_ORIGINS.split(',')
+    : [],
+}));
 
 // Initialize SQLite database
 const db = new Database(process.env.DB_PATH || './data/components.db');
