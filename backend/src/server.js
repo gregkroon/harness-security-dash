@@ -263,8 +263,8 @@ app.get('/api/exposures', (req, res) => {
     if (sort_by === 'severity') {
       const severityOrder = { critical: 4, high: 3, medium: 2, low: 1, info: 0, unknown: -1 };
       components.sort((a, b) => {
-        const aVal = severityOrder[a.highestSeverity] || -1;
-        const bVal = severityOrder[b.highestSeverity] || -1;
+        const aVal = (Object.hasOwn(severityOrder, a.highestSeverity) ? severityOrder[a.highestSeverity] : -1);
+        const bVal = (Object.hasOwn(severityOrder, b.highestSeverity) ? severityOrder[b.highestSeverity] : -1);
         return bVal - aVal;
       });
     } else if (sort_by === 'deployments') {
