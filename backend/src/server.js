@@ -7,6 +7,7 @@
 
 const express = require('express');
 const cors = require('cors');
+const csrf = require('./csrf-protection');
 const cron = require('node-cron');
 const Database = require('better-sqlite3');
 const path = require('path');
@@ -18,6 +19,11 @@ const PORT = process.env.PORT || 3001;
 // Middleware
 app.use(cors());
 app.use(express.json());
+app.use(csrf({
+  allowedOrigins: process.env.ALLOWED_ORIGINS
+    ? process.env.ALLOWED_ORIGINS.split(',')
+    : [],
+}));
 
 // Initialize SQLite database
 const db = new Database(process.env.DB_PATH || './data/components.db');
@@ -263,8 +269,8 @@ app.get('/api/exposures', (req, res) => {
     if (sort_by === 'severity') {
       const severityOrder = { critical: 4, high: 3, medium: 2, low: 1, info: 0, unknown: -1 };
       components.sort((a, b) => {
-        const aVal = severityOrder[a.highestSeverity] || -1;
-        const bVal = severityOrder[b.highestSeverity] || -1;
+        const aVal = (Object.hasOwn(severityOrder, a.highestSeverity) ? severityOrder[a.highestSeverity] : -1);
+        const bVal = (Object.hasOwn(severityOrder, b.highestSeverity) ? severityOrder[b.highestSeverity] : -1);
         return bVal - aVal;
       });
     } else if (sort_by === 'deployments') {

@@ -61,7 +61,7 @@ export function useAccountWideComponents() {
               unmatchedCount++;
               // Debug first unmapped deployment per project
               if (unmatchedCount === 1) {
-                console.log(`🔍 [${project.orgIdentifier}/${project.identifier}] Failed to match deployment:`, {
+                console.log('[%s/%s] Failed to match deployment:', project.orgIdentifier, project.identifier, {
                   deploymentArtifactId: dep.artifactId,
                   deploymentImage: dep.artifactId?.split(':')[0],
                   deploymentTag: dep.artifactId?.split(':')[1],
@@ -97,7 +97,7 @@ export function useAccountWideComponents() {
             deployments: deploymentsWithArtifactId,
           };
         } catch (error) {
-          console.warn(`⚠️  Failed to fetch data for ${project.orgIdentifier}/${project.identifier}:`, error);
+          console.warn('Failed to fetch data for %s/%s:', project.orgIdentifier, project.identifier, error);
           return null;
         }
       });

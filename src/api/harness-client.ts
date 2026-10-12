@@ -207,7 +207,7 @@ export class HarnessAPIClient {
         }
         return [];
       } catch (error) {
-        console.warn(`✗ Failed to fetch artifacts from source ${source.name}:`, error);
+        console.warn('Failed to fetch artifacts from source %s:', source.name, error);
         return [];
       }
     });
@@ -267,7 +267,7 @@ export class HarnessAPIClient {
         type: comp.type || comp.component_type || 'library',
       }));
     } catch (error) {
-      console.warn(`Failed to fetch components for artifact ${artifactId}:`, error);
+      console.warn('Failed to fetch components for artifact %s:', artifactId, error);
       return [];
     }
   }
@@ -332,20 +332,22 @@ export class HarnessAPIClient {
 
           // Debug: Log first issue to see structure and count by type
           if (issues.length > 0 && !window.__stoIssueLogged) {
-            const byType = issues.reduce((acc: any, i: any) => {
-              acc[i.type] = (acc[i.type] || 0) + 1;
+            const byType = issues.reduce((acc: Map<string, number>, i: any) => {
+              const key = String(i.type);
+              acc.set(key, (acc.get(key) || 0) + 1);
               return acc;
-            }, {});
-            console.log('🔍 STO findings by type:', byType);
+            }, new Map<string, number>());
+            console.log('🔍 STO findings by type:', Object.fromEntries(byType));
 
             // Log sample of each type
-            const samplesByType: any = {};
+            const samplesByType = new Map<string, any>();
             for (const issue of issues) {
-              if (!samplesByType[issue.type]) {
-                samplesByType[issue.type] = issue;
+              const key = String(issue.type);
+              if (!samplesByType.has(key)) {
+                samplesByType.set(key, issue);
               }
             }
-            console.log('🔍 Sample STO issues by type:', JSON.stringify(samplesByType, null, 2));
+            console.log('🔍 Sample STO issues by type:', JSON.stringify(Object.fromEntries(samplesByType), null, 2));
             window.__stoIssueLogged = true;
           }
 
@@ -368,8 +370,8 @@ export class HarnessAPIClient {
                   // Try single slash
                   const altParts = issue.key.split('/');
                   if (altParts.length >= 2) {
-                    componentName = altParts[altParts.length - 2];
-                    componentVersion = altParts[altParts.length - 1];
+                    componentName = altParts.at(-2) ?? 'unknown';
+                    componentVersion = altParts.at(-1) ?? '';
                   } else {
                     componentName = issue.key;
                   }
@@ -510,7 +512,7 @@ export class HarnessAPIClient {
           // Only log if it's not a 404
           const is404 = err instanceof Error && err.message.includes('404');
           if (!is404) {
-            console.warn(`⚠️  Failed to fetch execution ${executionId}:`, err);
+            console.warn('Failed to fetch execution %s:', executionId, err);
           }
         }
       }
@@ -576,7 +578,7 @@ export class HarnessAPIClient {
       console.log(`✓ Fetched ${allProjects.length} projects for org ${orgId}`);
       return allProjects;
     } catch (error) {
-      console.warn(`Failed to fetch projects for org ${orgId}:`, error);
+      console.warn('Failed to fetch projects for org %s:', orgId, error);
       return [];
     }
   }
