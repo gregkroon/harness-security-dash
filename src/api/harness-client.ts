@@ -207,7 +207,7 @@ export class HarnessAPIClient {
         }
         return [];
       } catch (error) {
-        console.warn(`✗ Failed to fetch artifacts from source ${source.name}:`, error);
+        console.warn('Failed to fetch artifacts from source %s:', source.name, error);
         return [];
       }
     });
@@ -267,7 +267,7 @@ export class HarnessAPIClient {
         type: comp.type || comp.component_type || 'library',
       }));
     } catch (error) {
-      console.warn(`Failed to fetch components for artifact ${artifactId}:`, error);
+      console.warn('Failed to fetch components for artifact %s:', artifactId, error);
       return [];
     }
   }
@@ -512,7 +512,7 @@ export class HarnessAPIClient {
           // Only log if it's not a 404
           const is404 = err instanceof Error && err.message.includes('404');
           if (!is404) {
-            console.warn(`⚠️  Failed to fetch execution ${executionId}:`, err);
+            console.warn('Failed to fetch execution %s:', executionId, err);
           }
         }
       }
@@ -578,7 +578,7 @@ export class HarnessAPIClient {
       console.log(`✓ Fetched ${allProjects.length} projects for org ${orgId}`);
       return allProjects;
     } catch (error) {
-      console.warn(`Failed to fetch projects for org ${orgId}:`, error);
+      console.warn('Failed to fetch projects for org %s:', orgId, error);
       return [];
     }
   }
