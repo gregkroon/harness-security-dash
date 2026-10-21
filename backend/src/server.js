@@ -19,6 +19,20 @@ const PORT = process.env.PORT || 3001;
 app.use(cors());
 app.use(express.json());
 
+// CSRF protection for state-changing requests.
+// Requires a custom X-Requested-With header on non-safe HTTP methods.
+// Custom headers trigger CORS preflight, preventing cross-origin form-based CSRF.
+app.use((req, res, next) => {
+  const safeMethods = ['GET', 'HEAD', 'OPTIONS'];
+  if (safeMethods.includes(req.method)) {
+    return next();
+  }
+  if (!req.headers['x-requested-with']) {
+    return res.status(403).json({ error: 'Forbidden: missing required X-Requested-With header' });
+  }
+  next();
+});
+
 // Initialize SQLite database
 const db = new Database(process.env.DB_PATH || './data/components.db');
 
@@ -263,8 +277,8 @@ app.get('/api/exposures', (req, res) => {
     if (sort_by === 'severity') {
       const severityOrder = { critical: 4, high: 3, medium: 2, low: 1, info: 0, unknown: -1 };
       components.sort((a, b) => {
-        const aVal = severityOrder[a.highestSeverity] || -1;
-        const bVal = severityOrder[b.highestSeverity] || -1;
+        const aVal = Object.prototype.hasOwnProperty.call(severityOrder, a.highestSeverity) ? severityOrder[a.highestSeverity] : -1;
+        const bVal = Object.prototype.hasOwnProperty.call(severityOrder, b.highestSeverity) ? severityOrder[b.highestSeverity] : -1;
         return bVal - aVal;
       });
     } else if (sort_by === 'deployments') {

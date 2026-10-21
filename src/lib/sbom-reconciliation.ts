@@ -184,8 +184,8 @@ export class SBOMReconciliation {
       const severityOrder = { critical: 4, high: 3, medium: 2, low: 1, info: 0, unknown: -1 };
       const highestSeverity = vulnArray.length > 0
         ? vulnArray.reduce((max, v) => {
-            const current = severityOrder[v.severity as keyof typeof severityOrder] || -1;
-            const maxVal = severityOrder[max as keyof typeof severityOrder] || -1;
+            const current = Object.prototype.hasOwnProperty.call(severityOrder, v.severity) ? severityOrder[v.severity as keyof typeof severityOrder] : -1;
+            const maxVal = Object.prototype.hasOwnProperty.call(severityOrder, max) ? severityOrder[max as keyof typeof severityOrder] : -1;
             return current > maxVal ? v.severity : max;
           }, 'unknown')
         : 'none';
@@ -310,8 +310,8 @@ export class SBOMReconciliation {
       const vulnArray = Array.from(comp.vulnerabilities.values());
       const severityOrder = { critical: 4, high: 3, medium: 2, low: 1, info: 0, unknown: -1 };
       const highestSeverity = vulnArray.reduce((max, v) => {
-        const current = severityOrder[v.severity as keyof typeof severityOrder] || -1;
-        const maxVal = severityOrder[max as keyof typeof severityOrder] || -1;
+        const current = Object.prototype.hasOwnProperty.call(severityOrder, v.severity) ? severityOrder[v.severity as keyof typeof severityOrder] : -1;
+        const maxVal = Object.prototype.hasOwnProperty.call(severityOrder, max) ? severityOrder[max as keyof typeof severityOrder] : -1;
         return current > maxVal ? v.severity : max;
       }, 'unknown');
 

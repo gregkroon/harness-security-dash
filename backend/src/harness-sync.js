@@ -190,7 +190,7 @@ class HarnessSync {
           sbomComponents,
         };
       } catch (error) {
-        console.warn(`⚠️  Failed ${project.orgIdentifier}/${project.identifier}:`, error.message);
+        console.warn('Failed %s/%s:', String(project.orgIdentifier), String(project.identifier), error.message);
         return null;
       }
     });
@@ -703,8 +703,8 @@ class HarnessSync {
       const severityOrder = { critical: 4, high: 3, medium: 2, low: 1, info: 0, unknown: -1 };
       const highestSeverity = vulnArray.length > 0
         ? vulnArray.reduce((max, v) => {
-            const current = severityOrder[v.severity] || -1;
-            const maxVal = severityOrder[max] || -1;
+            const current = Object.prototype.hasOwnProperty.call(severityOrder, v.severity) ? severityOrder[v.severity] : -1;
+            const maxVal = Object.prototype.hasOwnProperty.call(severityOrder, max) ? severityOrder[max] : -1;
             return current > maxVal ? v.severity : max;
           }, 'unknown')
         : 'none';
@@ -896,8 +896,8 @@ class HarnessSync {
       const severityOrder = { critical: 4, high: 3, medium: 2, low: 1, info: 0, unknown: -1 };
       const highestSeverity = vulnArray.length > 0
         ? vulnArray.reduce((max, v) => {
-            const current = severityOrder[v.severity] || -1;
-            const maxVal = severityOrder[max] || -1;
+            const current = Object.prototype.hasOwnProperty.call(severityOrder, v.severity) ? severityOrder[v.severity] : -1;
+            const maxVal = Object.prototype.hasOwnProperty.call(severityOrder, max) ? severityOrder[max] : -1;
             return current > maxVal ? v.severity : max;
           }, 'unknown')
         : 'none';
