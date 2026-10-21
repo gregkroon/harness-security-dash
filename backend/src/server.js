@@ -19,6 +19,20 @@ const PORT = process.env.PORT || 3001;
 app.use(cors());
 app.use(express.json());
 
+// CSRF protection for state-changing requests.
+// Requires a custom X-Requested-With header on non-safe HTTP methods.
+// Custom headers trigger CORS preflight, preventing cross-origin form-based CSRF.
+app.use((req, res, next) => {
+  const safeMethods = ['GET', 'HEAD', 'OPTIONS'];
+  if (safeMethods.includes(req.method)) {
+    return next();
+  }
+  if (!req.headers['x-requested-with']) {
+    return res.status(403).json({ error: 'Forbidden: missing required X-Requested-With header' });
+  }
+  next();
+});
+
 // Initialize SQLite database
 const db = new Database(process.env.DB_PATH || './data/components.db');
 
