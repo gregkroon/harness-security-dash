@@ -190,7 +190,7 @@ class HarnessSync {
           sbomComponents,
         };
       } catch (error) {
-        console.warn(`⚠️  Failed ${project.orgIdentifier}/${project.identifier}:`, error.message);
+        console.warn('Failed %s/%s:', String(project.orgIdentifier), String(project.identifier), error.message);
         return null;
       }
     });
