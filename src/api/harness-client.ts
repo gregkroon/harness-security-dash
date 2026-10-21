@@ -333,16 +333,22 @@ export class HarnessAPIClient {
           // Debug: Log first issue to see structure and count by type
           if (issues.length > 0 && !window.__stoIssueLogged) {
             const byType = issues.reduce((acc: any, i: any) => {
-              acc[i.type] = (acc[i.type] || 0) + 1;
+              const key = String(i.type);
+              if (Object.prototype.hasOwnProperty.call(acc, key)) {
+                acc[key] = acc[key] + 1;
+              } else {
+                acc[key] = 1;
+              }
               return acc;
-            }, {});
+            }, Object.create(null));
             console.log('🔍 STO findings by type:', byType);
 
             // Log sample of each type
-            const samplesByType: any = {};
+            const samplesByType: any = Object.create(null);
             for (const issue of issues) {
-              if (!samplesByType[issue.type]) {
-                samplesByType[issue.type] = issue;
+              const key = String(issue.type);
+              if (!Object.prototype.hasOwnProperty.call(samplesByType, key)) {
+                samplesByType[key] = issue;
               }
             }
             console.log('🔍 Sample STO issues by type:', JSON.stringify(samplesByType, null, 2));
@@ -368,8 +374,8 @@ export class HarnessAPIClient {
                   // Try single slash
                   const altParts = issue.key.split('/');
                   if (altParts.length >= 2) {
-                    componentName = altParts[altParts.length - 2];
-                    componentVersion = altParts[altParts.length - 1];
+                    componentName = altParts.at(-2) ?? 'unknown';
+                    componentVersion = altParts.at(-1) ?? '';
                   } else {
                     componentName = issue.key;
                   }
