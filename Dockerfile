@@ -42,8 +42,10 @@ FROM node:20-alpine
 
 WORKDIR /app
 
-# Install nginx for serving frontend
-RUN apk add --no-cache nginx
+# Install nginx for serving frontend and configure for non-root operation
+RUN apk add --no-cache nginx && \
+    sed -i 's/^user /#user /' /etc/nginx/nginx.conf && \
+    sed -i 's|/run/nginx/nginx.pid|/tmp/nginx.pid|' /etc/nginx/nginx.conf
 
 # Copy backend
 COPY --from=backend-build /app/backend /app/backend
@@ -51,13 +53,14 @@ COPY --from=backend-build /app/backend /app/backend
 # Copy frontend build
 COPY --from=frontend-build /app/frontend/dist /app/frontend/dist
 
-# Create nginx config
+# Create nginx config and set ownership for non-root operation
 RUN mkdir -p /run/nginx && \
-    mkdir -p /app/data
+    mkdir -p /app/data && \
+    chown -R node:node /app /run/nginx /var/lib/nginx /var/log/nginx
 
 COPY <<EOF /etc/nginx/http.d/default.conf
 server {
-    listen 80;
+    listen 8080;
     server_name _;
 
     # Frontend
@@ -96,14 +99,17 @@ EOF
 RUN chmod +x /app/start.sh
 
 # Expose port
-EXPOSE 80
+EXPOSE 8080
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
-  CMD wget --no-verbose --tries=1 --spider http://localhost/api/health || exit 1
+  CMD wget --no-verbose --tries=1 --spider http://localhost:8080/api/health || exit 1
 
 # Volume for persistent data
 VOLUME ["/app/data"]
+
+# Run as non-root user for security
+USER node
 
 # Start services
 CMD ["/app/start.sh"]
